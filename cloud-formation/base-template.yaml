@@ -1,0 +1,428 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Challenge - Punto 3: Deploy base project to instances'
+
+Parameters:
+  NetworkUserName:
+    Type: String
+    Description: Network user name for naming resources
+    Default: 'btobar'
+  
+  AuthorizationIdVPC:
+    Type: String
+    Description: ID of existing VPC AUTORIZACION-vpc
+    Default: vpc-05835abff54f99d3c
+
+  MaxInstancesASG:
+    Type: Number
+    Description: Maximum number of instances in Auto Scaling Group
+    Default: 3
+    MinValue: 1
+    MaxValue: 10
+
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet ID in us-east-1a for ALB
+    
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet ID in us-east-1b for ALB
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AvailabilityZone1: us-east-1a
+      AvailabilityZone2: us-east-1b
+      AMI: ami-0c02fb55956c7d316
+
+Resources:
+  # Nested Stack for Security Groups
+  SecurityGroupsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested-security-groups.yaml
+      Parameters:
+        NetworkUserName: !Ref NetworkUserName
+        AuthorizationIdVPC: !Ref AuthorizationIdVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-SecurityGroups-${NetworkUserName}'
+
+  # Nested Stack for Load Balancers
+  LoadBalancersStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: SecurityGroupsStack
+    Properties:
+      TemplateURL: nested-load-balancers.yaml
+      Parameters:
+        NetworkUserName: !Ref NetworkUserName
+        AuthorizationIdVPC: !Ref AuthorizationIdVPC
+        PublicSubnetAZ1: !Ref PublicSubnetAZ1
+        PublicSubnetAZ2: !Ref PublicSubnetAZ2
+        ALBSecurityGroupPDNId: !GetAtt SecurityGroupsStack.Outputs.ALBSecurityGroupPDNId
+        ALBSecurityGroupDEVId: !GetAtt SecurityGroupsStack.Outputs.ALBSecurityGroupDEVId
+        EC2InstanceDEVId: !Ref EC2InstanceDEV
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-LoadBalancers-${NetworkUserName}'
+
+  # Private Subnet for PDN environment (us-east-1a)
+  PrivateSubnetPDN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AuthorizationIdVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-Subnet-${NetworkUserName}-PDN'
+
+  # Private Subnet for DEV environment (us-east-1b)
+  PrivateSubnetDEV:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AuthorizationIdVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-Subnet-${NetworkUserName}-DEV'
+
+  # Launch Template for PDN Auto Scaling Group
+  LaunchTemplatePDN:
+    Type: AWS::EC2::LaunchTemplate
+    DependsOn: SecurityGroupsStack
+    Properties:
+      LaunchTemplateName: !Sub 'LDC-AUTH-LT-${NetworkUserName}-PDN'
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: t2.micro
+        SecurityGroupIds:
+          - !GetAtt SecurityGroupsStack.Outputs.SecurityGroupPDNId
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y docker git curl jq
+            service docker start
+            usermod -a -G docker ec2-user
+            systemctl enable docker
+            
+            # Install docker-compose
+            curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+            ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+            
+            # Create project directory
+            mkdir -p /opt/app
+            cd /opt/app
+            
+            # Clone or create docker-compose.yml for the project
+            cat > docker-compose.yml << 'EOF'
+            version: '3.7'
+            services:
+              mongo_db:
+                container_name: mongo_db_pdn
+                image: mongo:5.0.14
+                hostname: mongo_db
+                restart: always
+                environment: 
+                  TZ: "America/Bogota"
+                  MONGO_INITDB_ROOT_USERNAME: "devuser"
+                  MONGO_INITDB_ROOT_PASSWORD: "devpassword"
+                volumes:
+                  - ./mongodata:/data/db
+                ports:
+                  - 27017:27017 
+                healthcheck:
+                  test: echo 'db.runCommand("ping").ok' | mongo mongo_db:27017/test --quiet
+                  interval: 10s
+                  timeout: 10s
+                  retries: 5
+                  start_period: 20s
+                networks:
+                  - file-server-net
+              backend:
+                container_name: backend_pdn
+                image: gporras/file-server-app-backend:latest 
+                hostname: backend
+                ports:
+                  - "8080:8080"
+                environment:
+                  - SPRING_PROFILES_ACTIVE=prod
+                  - MONGO_HOST=mongo_db
+                restart: on-failure
+                healthcheck:
+                  test: curl -m 5 --silent --fail --request GET http://localhost:8080/actuator/health | jq --exit-status '.status == "UP"'
+                  interval: 10s
+                  timeout: 10s
+                  retries: 5
+                  start_period: 20s
+                networks:
+                  - file-server-net
+                depends_on:
+                  - mongo_db
+              frontend:
+                container_name: frontend_pdn
+                image: gporras/file-server-app-frontend:latest
+                hostname: frontend-fileserver
+                ports:
+                  - "4200:80"
+                environment:
+                  - API_URL=http://backend:8080/api
+                restart: on-failure
+                networks:
+                  - file-server-net
+                depends_on:
+                  - backend
+            networks:
+              file-server-net:
+                driver: bridge
+            EOF
+            
+            # Set permissions
+            chown -R ec2-user:ec2-user /opt/app
+            
+            # Start the application
+            docker-compose up -d
+            
+            # Log deployment
+            echo "PDN environment deployed $(date)" > /var/log/deployment.log
+            echo "Application should be available on:" >> /var/log/deployment.log
+            echo "Frontend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):4200" >> /var/log/deployment.log
+            echo "Backend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):8080" >> /var/log/deployment.log
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-PDN'
+              - Key: Environment
+                Value: 'PDN'
+
+  # Auto Scaling Group for PDN
+  AutoScalingGroupPDN:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: LoadBalancersStack
+    Properties:
+      AutoScalingGroupName: !Sub 'LDC-AUTH-ASG-${NetworkUserName}-PDN'
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetPDN
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplatePDN
+        Version: !GetAtt LaunchTemplatePDN.LatestVersionNumber
+      MinSize: 1
+      MaxSize: !Ref MaxInstancesASG
+      DesiredCapacity: 1
+      TargetGroupARNs:
+        - !GetAtt LoadBalancersStack.Outputs.TargetGroupPDNArn
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-ASG-${NetworkUserName}-PDN'
+          PropagateAtLaunch: false
+        - Key: Environment
+          Value: 'PDN'
+          PropagateAtLaunch: true
+
+  # EC2 Instance for DEV environment with project deployment
+  EC2InstanceDEV:
+    Type: AWS::EC2::Instance
+    DependsOn: SecurityGroupsStack
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      SubnetId: !Ref PrivateSubnetDEV
+      SecurityGroupIds:
+        - !GetAtt SecurityGroupsStack.Outputs.SecurityGroupDEVId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker git curl jq
+          service docker start
+          usermod -a -G docker ec2-user
+          systemctl enable docker
+          
+          # Install docker-compose
+          curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+          ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+          
+          # Create project directory
+          mkdir -p /opt/app
+          cd /opt/app
+          
+          # Clone or create docker-compose.yml for the project
+          cat > docker-compose.yml << 'EOF'
+          version: '3.7'
+          services:
+            mongo_db:
+              container_name: mongo_db_dev
+              image: mongo:5.0.14
+              hostname: mongo_db
+              restart: always
+              environment: 
+                TZ: "America/Bogota"
+                MONGO_INITDB_ROOT_USERNAME: "devuser"
+                MONGO_INITDB_ROOT_PASSWORD: "devpassword"
+              volumes:
+                - ./mongodata:/data/db
+              ports:
+                - 27017:27017 
+              healthcheck:
+                test: echo 'db.runCommand("ping").ok' | mongo mongo_db:27017/test --quiet
+                interval: 10s
+                timeout: 10s
+                retries: 5
+                start_period: 20s
+              networks:
+                - file-server-net
+            backend:
+              container_name: backend_dev
+              image: gporras/file-server-app-backend:latest 
+              hostname: backend
+              ports:
+                - "8080:8080"
+              environment:
+                - SPRING_PROFILES_ACTIVE=prod
+                - MONGO_HOST=mongo_db
+              restart: on-failure
+              healthcheck:
+                test: curl -m 5 --silent --fail --request GET http://localhost:8080/actuator/health | jq --exit-status '.status == "UP"'
+                interval: 10s
+                timeout: 10s
+                retries: 5
+                start_period: 20s
+              networks:
+                - file-server-net
+              depends_on:
+                - mongo_db
+            frontend:
+              container_name: frontend_dev
+              image: gporras/file-server-app-frontend:latest
+              hostname: frontend-fileserver
+              ports:
+                - "4200:80"
+              environment:
+                - API_URL=http://backend:8080/api
+              restart: on-failure
+              networks:
+                - file-server-net
+              depends_on:
+                - backend
+          networks:
+            file-server-net:
+              driver: bridge
+          EOF
+          
+          # Set permissions
+          chown -R ec2-user:ec2-user /opt/app
+          
+          # Start the application
+          docker-compose up -d
+          
+          # Log deployment
+          echo "DEV environment deployed $(date)" > /var/log/deployment.log
+          echo "Application should be available on:" >> /var/log/deployment.log
+          echo "Frontend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):4200" >> /var/log/deployment.log
+          echo "Backend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):8080" >> /var/log/deployment.log
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-DEV'
+        - Key: Environment
+          Value: 'DEV'
+
+Outputs:
+  NetworkUserName:
+    Description: 'Network user name used'
+    Value: !Ref NetworkUserName
+    Export:
+      Name: !Sub '${AWS::StackName}-NetworkUserName'
+
+  SecurityGroupPDNName:
+    Description: 'PDN Security Group name'
+    Value: !GetAtt SecurityGroupsStack.Outputs.SecurityGroupPDNName
+    Export:
+      Name: !Sub '${AWS::StackName}-SG-PDN-Name'
+
+  SecurityGroupDEVName:
+    Description: 'DEV Security Group name'
+    Value: !GetAtt SecurityGroupsStack.Outputs.SecurityGroupDEVName
+    Export:
+      Name: !Sub '${AWS::StackName}-SG-DEV-Name'
+
+  InstanceNamePDN:
+    Description: 'PDN EC2 instance name'
+    Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-PDN'
+    Export:
+      Name: !Sub '${AWS::StackName}-Instance-PDN-Name'
+
+  InstanceNameDEV:
+    Description: 'DEV EC2 instance name'
+    Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-DEV'
+    Export:
+      Name: !Sub '${AWS::StackName}-Instance-DEV-Name'
+
+  AutoScalingGroupPDNName:
+    Description: 'PDN Auto Scaling Group name'
+    Value: !Sub 'LDC-AUTH-ASG-${NetworkUserName}-PDN'
+    Export:
+      Name: !Sub '${AWS::StackName}-ASG-PDN-Name'
+
+  EC2InstanceDEVId:
+    Description: 'DEV EC2 instance ID'
+    Value: !Ref EC2InstanceDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-DEV-ID'
+
+  PDNApplicationURL:
+    Description: 'PDN Frontend Application URL (via ALB)'
+    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerPDNDNS}'
+    Export:
+      Name: !Sub '${AWS::StackName}-PDN-App-URL'
+
+  DEVApplicationURL:
+    Description: 'DEV Frontend Application URL (internal)'
+    Value: !Sub 'http://${EC2InstanceDEV.PrivateIp}:4200'
+    Export:
+      Name: !Sub '${AWS::StackName}-DEV-App-URL'
+
+  PDNBackendURL:
+    Description: 'PDN Backend API URL (via ALB on port 8080 - requires ALB listener)'
+    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerPDNDNS}:8080'
+    Export:
+      Name: !Sub '${AWS::StackName}-PDN-Backend-URL'
+
+  DEVBackendURL:
+    Description: 'DEV Backend API URL (internal)'
+    Value: !Sub 'http://${EC2InstanceDEV.PrivateIp}:8080'
+    Export:
+      Name: !Sub '${AWS::StackName}-DEV-Backend-URL'
+
+  # ALB Names
+  LoadBalancerPDNName:
+    Description: 'PDN Load Balancer name'
+    Value: !GetAtt LoadBalancersStack.Outputs.LoadBalancerPDNName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-PDN-Name'
+
+  LoadBalancerDEVName:
+    Description: 'DEV Load Balancer name'
+    Value: !GetAtt LoadBalancersStack.Outputs.LoadBalancerDEVName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DEV-Name'
+
+  # ALB DNS Names (Public URLs)
+  LoadBalancerPDNDNS:
+    Description: 'PDN Load Balancer DNS name (public URL)'
+    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerPDNDNS}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-PDN-DNS'
+
+  LoadBalancerDEVDNS:
+    Description: 'DEV Load Balancer DNS name (public URL)'
+    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerDEVDNS}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DEV-DNS'

@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Nested Stack - Application Load Balancers for PDN and DEV environments'
+
+Parameters:
+  NetworkUserName:
+    Type: String
+    Description: Network user name for naming resources
+    
+  AuthorizationIdVPC:
+    Type: String
+    Description: ID of existing VPC
+    
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet ID in us-east-1a for ALB
+    
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet ID in us-east-1b for ALB
+    
+  ALBSecurityGroupPDNId:
+    Type: String
+    Description: Security Group ID for PDN ALB
+    
+  ALBSecurityGroupDEVId:
+    Type: String
+    Description: Security Group ID for DEV ALB
+    
+  EC2InstanceDEVId:
+    Type: String
+    Description: DEV EC2 Instance ID for target group
+
+Resources:
+  # Application Load Balancer for PDN
+  ApplicationLoadBalancerPDN:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-PDN'
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref ALBSecurityGroupPDNId
+      Subnets:
+        - !Ref PublicSubnetAZ1
+        - !Ref PublicSubnetAZ2
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-PDN'
+        - Key: Environment
+          Value: 'PDN'
+
+  # Target Group for PDN (Frontend)
+  TargetGroupPDN:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'LDC-AUTH-TG-${NetworkUserName}-PDN'
+      Port: 4200
+      Protocol: HTTP
+      VpcId: !Ref AuthorizationIdVPC
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-TG-${NetworkUserName}-PDN'
+
+  # Listener for PDN ALB
+  ListenerPDN:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroupPDN
+      LoadBalancerArn: !Ref ApplicationLoadBalancerPDN
+      Port: 80
+      Protocol: HTTP
+
+  # Application Load Balancer for DEV
+  ApplicationLoadBalancerDEV:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-DEV'
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref ALBSecurityGroupDEVId
+      Subnets:
+        - !Ref PublicSubnetAZ1
+        - !Ref PublicSubnetAZ2
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-DEV'
+        - Key: Environment
+          Value: 'DEV'
+
+  # Target Group for DEV (Frontend)
+  TargetGroupDEV:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'LDC-AUTH-TG-${NetworkUserName}-DEV'
+      Port: 4200
+      Protocol: HTTP
+      VpcId: !Ref AuthorizationIdVPC
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Targets:
+        - Id: !Ref EC2InstanceDEVId
+          Port: 4200
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-TG-${NetworkUserName}-DEV'
+
+  # Listener for DEV ALB
+  ListenerDEV:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroupDEV
+      LoadBalancerArn: !Ref ApplicationLoadBalancerDEV
+      Port: 80
+      Protocol: HTTP
+
+Outputs:
+  ApplicationLoadBalancerPDNId:
+    Description: 'PDN Application Load Balancer ID'
+    Value: !Ref ApplicationLoadBalancerPDN
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-PDN-ID'
+
+  ApplicationLoadBalancerDEVId:
+    Description: 'DEV Application Load Balancer ID'
+    Value: !Ref ApplicationLoadBalancerDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DEV-ID'
+
+  TargetGroupPDNArn:
+    Description: 'PDN Target Group ARN'
+    Value: !Ref TargetGroupPDN
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-PDN-ARN'
+
+  TargetGroupDEVArn:
+    Description: 'DEV Target Group ARN'
+    Value: !Ref TargetGroupDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-DEV-ARN'
+
+  LoadBalancerPDNName:
+    Description: 'PDN Load Balancer name'
+    Value: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-PDN'
+
+  LoadBalancerDEVName:
+    Description: 'DEV Load Balancer name'
+    Value: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-DEV'
+
+  LoadBalancerPDNDNS:
+    Description: 'PDN Load Balancer DNS name'
+    Value: !GetAtt ApplicationLoadBalancerPDN.DNSName
+
+  LoadBalancerDEVDNS:
+    Description: 'DEV Load Balancer DNS name'
+    Value: !GetAtt ApplicationLoadBalancerDEV.DNSName 

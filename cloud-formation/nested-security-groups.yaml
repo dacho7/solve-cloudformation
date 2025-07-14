@@ -1,0 +1,166 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Nested Stack - Security Groups for PDN and DEV environments'
+
+Parameters:
+  NetworkUserName:
+    Type: String
+    Description: Network user name for naming resources
+    
+  AuthorizationIdVPC:
+    Type: String
+    Description: ID of existing VPC
+
+Resources:
+  # Basic Security Group for PDN
+  SecurityGroupPDN:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'LDC-AUTH-SG-${NetworkUserName}-PDN'
+      GroupDescription: Security group for PDN environment
+      VpcId: !Ref AuthorizationIdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 10.0.0.0/16
+          Description: 'Backend Spring Boot'
+        - IpProtocol: tcp
+          FromPort: 4200
+          ToPort: 4200
+          CidrIp: 10.0.0.0/16
+          Description: 'Frontend Angular'
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: 10.0.0.0/16
+          Description: 'MongoDB'
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-SG-${NetworkUserName}-PDN'
+
+  # Basic Security Group for DEV
+  SecurityGroupDEV:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'LDC-AUTH-SG-${NetworkUserName}-DEV'
+      GroupDescription: Security group for DEV environment
+      VpcId: !Ref AuthorizationIdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 10.0.0.0/16
+          Description: 'Backend Spring Boot'
+        - IpProtocol: tcp
+          FromPort: 4200
+          ToPort: 4200
+          CidrIp: 10.0.0.0/16
+          Description: 'Frontend Angular'
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: 10.0.0.0/16
+          Description: 'MongoDB'
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-SG-${NetworkUserName}-DEV'
+
+  # Security Group for ALB PDN
+  ALBSecurityGroupPDN:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'LDC-AUTH-ALB-SG-${NetworkUserName}-PDN'
+      GroupDescription: Security group for PDN ALB
+      VpcId: !Ref AuthorizationIdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTP from Internet'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS from Internet'
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-ALB-SG-${NetworkUserName}-PDN'
+
+  # Security Group for ALB DEV
+  ALBSecurityGroupDEV:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'LDC-AUTH-ALB-SG-${NetworkUserName}-DEV'
+      GroupDescription: Security group for DEV ALB
+      VpcId: !Ref AuthorizationIdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTP from Internet'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS from Internet'
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-ALB-SG-${NetworkUserName}-DEV'
+
+# Security Group Rules that reference other security groups
+  # PDN EC2 Security Group Rule for ALB access
+  SecurityGroupIngressPDNFromALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupPDN
+      IpProtocol: tcp
+      FromPort: 4200
+      ToPort: 4200
+      SourceSecurityGroupId: !Ref ALBSecurityGroupPDN
+      Description: 'Frontend Angular from ALB'
+
+  # DEV EC2 Security Group Rule for ALB access
+  SecurityGroupIngressDEVFromALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupDEV
+      IpProtocol: tcp
+      FromPort: 4200
+      ToPort: 4200
+      SourceSecurityGroupId: !Ref ALBSecurityGroupDEV
+      Description: 'Frontend Angular from ALB'
+
+Outputs:
+  SecurityGroupPDNId:
+    Description: 'PDN Security Group ID'
+    Value: !Ref SecurityGroupPDN
+    Export:
+      Name: !Sub '${AWS::StackName}-SG-PDN-ID'
+
+  SecurityGroupDEVId:
+    Description: 'DEV Security Group ID'
+    Value: !Ref SecurityGroupDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-SG-DEV-ID'
+
+  ALBSecurityGroupPDNId:
+    Description: 'PDN ALB Security Group ID'
+    Value: !Ref ALBSecurityGroupPDN
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-SG-PDN-ID'
+
+  ALBSecurityGroupDEVId:
+    Description: 'DEV ALB Security Group ID'
+    Value: !Ref ALBSecurityGroupDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-SG-DEV-ID'
+
+  SecurityGroupPDNName:
+    Description: 'PDN Security Group name'
+    Value: !Sub 'LDC-AUTH-SG-${NetworkUserName}-PDN'
+
+  SecurityGroupDEVName:
+    Description: 'DEV Security Group name'
+    Value: !Sub 'LDC-AUTH-SG-${NetworkUserName}-DEV' 
