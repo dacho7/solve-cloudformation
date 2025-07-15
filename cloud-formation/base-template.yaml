@@ -110,6 +110,114 @@ Resources:
         - Key: Name
           Value: !Sub 'LDC-AUTH-SecurityGroups-${NetworkUserName}'
 
+  # EC2 Instance for DEV environment with project deployment
+  EC2InstanceDEV:
+    Type: AWS::EC2::Instance
+    DependsOn: SecurityGroupsStack
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      SubnetId: !Ref PrivateSubnetDEV
+      SecurityGroupIds:
+        - !GetAtt SecurityGroupsStack.Outputs.SecurityGroupDEVId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker git curl jq
+          service docker start
+          usermod -a -G docker ec2-user
+          systemctl enable docker
+          
+          # Install docker-compose
+          curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+          ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+          
+          # Create project directory
+          mkdir -p /opt/app
+          cd /opt/app
+          
+          # Clone or create docker-compose.yml for the project
+          cat > docker-compose.yml << 'EOF'
+          version: '3.7'
+          services:
+            mongo_db:
+              container_name: mongo_db_dev
+              image: mongo:5.0.14
+              hostname: mongo_db
+              restart: always
+              environment: 
+                TZ: "America/Bogota"
+                MONGO_INITDB_ROOT_USERNAME: "devuser"
+                MONGO_INITDB_ROOT_PASSWORD: "devpassword"
+              volumes:
+                - ./mongodata:/data/db
+              ports:
+                - 27017:27017 
+              healthcheck:
+                test: echo 'db.runCommand("ping").ok' | mongo mongo_db:27017/test --quiet
+                interval: 10s
+                timeout: 10s
+                retries: 5
+                start_period: 20s
+              networks:
+                - file-server-net
+            backend:
+              container_name: backend_dev
+              image: gporras/file-server-app-backend:latest 
+              hostname: backend
+              ports:
+                - "8080:8080"
+              environment:
+                - SPRING_PROFILES_ACTIVE=prod
+                - MONGO_HOST=mongo_db
+              restart: on-failure
+              healthcheck:
+                test: curl -m 5 --silent --fail --request GET http://localhost:8080/actuator/health | jq --exit-status '.status == "UP"'
+                interval: 10s
+                timeout: 10s
+                retries: 5
+                start_period: 20s
+              networks:
+                - file-server-net
+              depends_on:
+                - mongo_db
+            frontend:
+              container_name: frontend_dev
+              image: gporras/file-server-app-frontend:latest
+              hostname: frontend-fileserver
+              ports:
+                - "4200:80"
+              environment:
+                - API_URL=http://backend:8080/api
+              restart: on-failure
+              networks:
+                - file-server-net
+              depends_on:
+                - backend
+          networks:
+            file-server-net:
+              driver: bridge
+          EOF
+          
+          # Set permissions
+          chown -R ec2-user:ec2-user /opt/app
+          
+          # Start the application
+          docker-compose up -d
+          
+          # Log deployment
+          echo "DEV environment deployed $(date)" > /var/log/deployment.log
+          echo "Application should be available on:" >> /var/log/deployment.log
+          echo "Frontend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):4200" >> /var/log/deployment.log
+          echo "Backend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):8080" >> /var/log/deployment.log
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-DEV'
+        - Key: Environment
+          Value: 'DEV'
+
   # Nested Stack for Load Balancers
   LoadBalancersStack:
     Type: AWS::CloudFormation::Stack
@@ -117,6 +225,7 @@ Resources:
       - SecurityGroupsStack
       - PublicSubnetAZ1
       - PublicSubnetAZ2
+      - EC2InstanceDEV
     Properties:
       TemplateURL: nested-load-balancers.yaml
       Parameters:
@@ -291,114 +400,6 @@ Resources:
         - Key: Environment
           Value: 'PDN'
           PropagateAtLaunch: true
-
-  # EC2 Instance for DEV environment with project deployment
-  EC2InstanceDEV:
-    Type: AWS::EC2::Instance
-    DependsOn: SecurityGroupsStack
-    Properties:
-      InstanceType: t2.micro
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      SubnetId: !Ref PrivateSubnetDEV
-      SecurityGroupIds:
-        - !GetAtt SecurityGroupsStack.Outputs.SecurityGroupDEVId
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y docker git curl jq
-          service docker start
-          usermod -a -G docker ec2-user
-          systemctl enable docker
-          
-          # Install docker-compose
-          curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          chmod +x /usr/local/bin/docker-compose
-          ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
-          
-          # Create project directory
-          mkdir -p /opt/app
-          cd /opt/app
-          
-          # Clone or create docker-compose.yml for the project
-          cat > docker-compose.yml << 'EOF'
-          version: '3.7'
-          services:
-            mongo_db:
-              container_name: mongo_db_dev
-              image: mongo:5.0.14
-              hostname: mongo_db
-              restart: always
-              environment: 
-                TZ: "America/Bogota"
-                MONGO_INITDB_ROOT_USERNAME: "devuser"
-                MONGO_INITDB_ROOT_PASSWORD: "devpassword"
-              volumes:
-                - ./mongodata:/data/db
-              ports:
-                - 27017:27017 
-              healthcheck:
-                test: echo 'db.runCommand("ping").ok' | mongo mongo_db:27017/test --quiet
-                interval: 10s
-                timeout: 10s
-                retries: 5
-                start_period: 20s
-              networks:
-                - file-server-net
-            backend:
-              container_name: backend_dev
-              image: gporras/file-server-app-backend:latest 
-              hostname: backend
-              ports:
-                - "8080:8080"
-              environment:
-                - SPRING_PROFILES_ACTIVE=prod
-                - MONGO_HOST=mongo_db
-              restart: on-failure
-              healthcheck:
-                test: curl -m 5 --silent --fail --request GET http://localhost:8080/actuator/health | jq --exit-status '.status == "UP"'
-                interval: 10s
-                timeout: 10s
-                retries: 5
-                start_period: 20s
-              networks:
-                - file-server-net
-              depends_on:
-                - mongo_db
-            frontend:
-              container_name: frontend_dev
-              image: gporras/file-server-app-frontend:latest
-              hostname: frontend-fileserver
-              ports:
-                - "4200:80"
-              environment:
-                - API_URL=http://backend:8080/api
-              restart: on-failure
-              networks:
-                - file-server-net
-              depends_on:
-                - backend
-          networks:
-            file-server-net:
-              driver: bridge
-          EOF
-          
-          # Set permissions
-          chown -R ec2-user:ec2-user /opt/app
-          
-          # Start the application
-          docker-compose up -d
-          
-          # Log deployment
-          echo "DEV environment deployed $(date)" > /var/log/deployment.log
-          echo "Application should be available on:" >> /var/log/deployment.log
-          echo "Frontend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):4200" >> /var/log/deployment.log
-          echo "Backend: http://$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4):8080" >> /var/log/deployment.log
-      Tags:
-        - Key: Name
-          Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-DEV'
-        - Key: Environment
-          Value: 'DEV'
 
 Outputs:
   NetworkUserName:
