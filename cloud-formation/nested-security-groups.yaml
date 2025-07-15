@@ -20,19 +20,24 @@ Resources:
       VpcId: !Ref AuthorizationIdVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/8
+          Description: 'SSH access from VPC'
+        - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
-          CidrIp: 10.0.0.0/16
+          CidrIp: 10.0.0.0/8
           Description: 'Backend Spring Boot'
         - IpProtocol: tcp
           FromPort: 4200
           ToPort: 4200
-          CidrIp: 10.0.0.0/16
+          CidrIp: 10.0.0.0/8
           Description: 'Frontend Angular'
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27017
-          CidrIp: 10.0.0.0/16
+          CidrIp: 10.0.0.0/8
           Description: 'MongoDB'
       Tags:
         - Key: Name
@@ -47,19 +52,24 @@ Resources:
       VpcId: !Ref AuthorizationIdVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/8
+          Description: 'SSH access from VPC'
+        - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
-          CidrIp: 10.0.0.0/16
+          CidrIp: 10.0.0.0/8
           Description: 'Backend Spring Boot'
         - IpProtocol: tcp
           FromPort: 4200
           ToPort: 4200
-          CidrIp: 10.0.0.0/16
+          CidrIp: 10.0.0.0/8
           Description: 'Frontend Angular'
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27017
-          CidrIp: 10.0.0.0/16
+          CidrIp: 10.0.0.0/8
           Description: 'MongoDB'
       Tags:
         - Key: Name

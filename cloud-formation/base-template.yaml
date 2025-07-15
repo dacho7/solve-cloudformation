@@ -32,7 +32,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AuthorizationIdVPC
-      CidrBlock: 10.0.10.0/24
+      CidrBlock: 10.0.100.0/24
       AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
       MapPublicIpOnLaunch: true
       Tags:
@@ -44,7 +44,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AuthorizationIdVPC
-      CidrBlock: 10.0.11.0/24
+      CidrBlock: 10.0.101.0/24
       AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
       MapPublicIpOnLaunch: true
       Tags:
@@ -154,7 +154,7 @@ Resources:
   SecurityGroupsStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: nested-security-groups.yaml
+      TemplateURL: https://btobar.s3.us-east-1.amazonaws.com/nested-security-groups.yaml
       Parameters:
         NetworkUserName: !Ref NetworkUserName
         AuthorizationIdVPC: !Ref AuthorizationIdVPC
@@ -282,7 +282,7 @@ Resources:
       - PublicSubnetAZ2
       - EC2InstanceDEV
     Properties:
-      TemplateURL: nested-load-balancers.yaml
+      TemplateURL: https://btobar.s3.us-east-1.amazonaws.com/nested-load-balancers.yaml
       Parameters:
         NetworkUserName: !Ref NetworkUserName
         AuthorizationIdVPC: !Ref AuthorizationIdVPC
@@ -300,7 +300,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AuthorizationIdVPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: 10.0.200.0/28
       AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
       MapPublicIpOnLaunch: false
       Tags:
@@ -312,7 +312,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AuthorizationIdVPC
-      CidrBlock: 10.0.2.0/24
+      CidrBlock: 10.0.200.16/30
       AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
       MapPublicIpOnLaunch: false
       Tags:
