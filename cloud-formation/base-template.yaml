@@ -98,6 +98,58 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnetAZ2
 
+  # Elastic IP for NAT Gateway
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-NAT-EIP-${NetworkUserName}'
+
+  # NAT Gateway for private subnets
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnetAZ1
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-NAT-Gateway-${NetworkUserName}'
+
+  # Route Table for Private Subnets
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AuthorizationIdVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-PrivateRT-${NetworkUserName}'
+
+  # Default Private Route to NAT Gateway
+  DefaultPrivateRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NATGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  # Associate Private Subnet PDN with Private Route Table
+  PrivateSubnetPDNRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetPDN
+
+  # Associate Private Subnet DEV with Private Route Table
+  PrivateSubnetDEVRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetDEV
+
   # Nested Stack for Security Groups
   SecurityGroupsStack:
     Type: AWS::CloudFormation::Stack
@@ -113,7 +165,10 @@ Resources:
   # EC2 Instance for DEV environment with project deployment
   EC2InstanceDEV:
     Type: AWS::EC2::Instance
-    DependsOn: SecurityGroupsStack
+    DependsOn: 
+      - SecurityGroupsStack
+      - PrivateSubnetDEVRouteTableAssociation
+      - DefaultPrivateRoute
     Properties:
       InstanceType: t2.micro
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
@@ -267,7 +322,10 @@ Resources:
   # Launch Template for PDN Auto Scaling Group
   LaunchTemplatePDN:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn: SecurityGroupsStack
+    DependsOn: 
+      - SecurityGroupsStack
+      - PrivateSubnetPDNRouteTableAssociation
+      - DefaultPrivateRoute
     Properties:
       LaunchTemplateName: !Sub 'LDC-AUTH-LT-${NetworkUserName}-PDN'
       LaunchTemplateData:
@@ -518,3 +576,34 @@ Outputs:
     Value: !Ref PublicRouteTable
     Export:
       Name: !Sub '${AWS::StackName}-PublicRT-ID'
+
+  # NAT Gateway and Private Network
+  NATGatewayId:
+    Description: 'NAT Gateway ID'
+    Value: !Ref NATGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT-Gateway-ID'
+
+  NATGatewayEIPId:
+    Description: 'NAT Gateway Elastic IP ID'
+    Value: !Ref NATGatewayEIP
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT-EIP-ID'
+
+  PrivateRouteTableId:
+    Description: 'Private Route Table ID'
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRT-ID'
+
+  PrivateSubnetPDNId:
+    Description: 'Private Subnet PDN ID'
+    Value: !Ref PrivateSubnetPDN
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet-PDN-ID'
+
+  PrivateSubnetDEVId:
+    Description: 'Private Subnet DEV ID'
+    Value: !Ref PrivateSubnetDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet-DEV-ID'
