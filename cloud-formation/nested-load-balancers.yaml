@@ -156,3 +156,50 @@ Resources:
       LoadBalancerArn: !Ref ApplicationLoadBalancerDEV
       Port: 80
       Protocol: HTTP
+      
+Outputs:
+  ApplicationLoadBalancerPDNId:
+    Description: 'PDN Application Load Balancer ID'
+    Value: !Ref ApplicationLoadBalancerPDN
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-PDN-ID'
+
+  ApplicationLoadBalancerDEVId:
+    Description: 'DEV Application Load Balancer ID'
+    Value: !Ref ApplicationLoadBalancerDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DEV-ID'
+
+  TargetGroupPDNArn:
+    Description: 'PDN Target Group ARN'
+    Value: !Ref TargetGroupPDN
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-PDN-ARN'
+
+  TargetGroupPDNBackendArn:
+    Description: 'PDN Backend Target Group ARN'
+    Value: !Ref TargetGroupPDNBackend
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-PDN-Backend-ARN'
+
+  TargetGroupDEVArn:
+    Description: 'DEV Target Group ARN'
+    Value: !Ref TargetGroupDEV
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-DEV-ARN'
+
+  LoadBalancerPDNName:
+    Description: 'PDN Load Balancer name'
+    Value: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-PDN'
+
+  LoadBalancerDEVName:
+    Description: 'DEV Load Balancer name'
+    Value: !Sub 'LDC-AUTH-ALB-${NetworkUserName}-DEV'
+
+  LoadBalancerPDNDNS:
+    Description: 'PDN Load Balancer DNS name'
+    Value: !GetAtt ApplicationLoadBalancerPDN.DNSName
+
+  LoadBalancerDEVDNS:
+    Description: 'DEV Load Balancer DNS name'
+    Value: !GetAtt ApplicationLoadBalancerDEV.DNSName 

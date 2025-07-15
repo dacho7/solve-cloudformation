@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation Challenge - Punto 3: Deploy base project to instances'
+Description: 'CloudFormation Challenge - btobar'
 
 Parameters:
   NetworkUserName:
