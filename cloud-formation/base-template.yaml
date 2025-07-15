@@ -485,12 +485,27 @@ Resources:
   # You can get their IPs via AWS CLI: aws ec2 describe-instances --filters "Name=tag:aws:autoscaling:groupName,Values=LDC-AUTH-ASG-btobar-PDN"
 
 Outputs:
+  # Network user name
   NetworkUserName:
     Description: 'Network user name used'
     Value: !Ref NetworkUserName
     Export:
       Name: !Sub '${AWS::StackName}-NetworkUserName'
 
+  # Load balancer names
+  LoadBalancerPDNName:
+    Description: 'PDN Load Balancer name'
+    Value: !GetAtt LoadBalancersStack.Outputs.LoadBalancerPDNName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-PDN-Name'
+
+  LoadBalancerDEVName:
+    Description: 'DEV Load Balancer name'
+    Value: !GetAtt LoadBalancersStack.Outputs.LoadBalancerDEVName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DEV-Name'
+
+  # Security group names
   SecurityGroupPDNName:
     Description: 'PDN Security Group name'
     Value: !GetAtt SecurityGroupsStack.Outputs.SecurityGroupPDNName
@@ -503,6 +518,7 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-SG-DEV-Name'
 
+  # Instance names
   InstanceNamePDN:
     Description: 'PDN EC2 instance name'
     Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-PDN'
@@ -520,140 +536,3 @@ Outputs:
     Value: !Sub 'LDC-AUTH-ASG-${NetworkUserName}-PDN'
     Export:
       Name: !Sub '${AWS::StackName}-ASG-PDN-Name'
-
-  EC2InstanceDEVId:
-    Description: 'DEV EC2 instance ID'
-    Value: !Ref EC2InstanceDEV
-    Export:
-      Name: !Sub '${AWS::StackName}-EC2-DEV-ID'
-
-  PDNApplicationURL:
-    Description: 'PDN Frontend Application URL (via ALB)'
-    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerPDNDNS}'
-    Export:
-      Name: !Sub '${AWS::StackName}-PDN-App-URL'
-
-  # Note: For direct backend access from your local machine, use PDNDirectBackendURL below
-  # ALB backend access would require additional listener configuration
-
-  # ALB Names
-  LoadBalancerPDNName:
-    Description: 'PDN Load Balancer name'
-    Value: !GetAtt LoadBalancersStack.Outputs.LoadBalancerPDNName
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-PDN-Name'
-
-  LoadBalancerDEVName:
-    Description: 'DEV Load Balancer name'
-    Value: !GetAtt LoadBalancersStack.Outputs.LoadBalancerDEVName
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-DEV-Name'
-
-  # ALB DNS Names (Public URLs)
-  LoadBalancerPDNDNS:
-    Description: 'PDN Load Balancer DNS name (public URL)'
-    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerPDNDNS}'
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-PDN-DNS'
-
-  LoadBalancerDEVDNS:
-    Description: 'DEV Load Balancer DNS name (public URL)'
-    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerDEVDNS}'
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-DEV-DNS'
-
-  # Public Subnets
-  PublicSubnetAZ1Id:
-    Description: 'Public Subnet AZ1 ID'
-    Value: !Ref PublicSubnetAZ1
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet-AZ1-ID'
-
-  PublicSubnetAZ2Id:
-    Description: 'Public Subnet AZ2 ID'
-    Value: !Ref PublicSubnetAZ2
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet-AZ2-ID'
-
-  InternetGatewayId:
-    Description: 'Internet Gateway ID'
-    Value: !Ref ExistingInternetGateway
-    Export:
-      Name: !Sub '${AWS::StackName}-IGW-ID'
-
-  PublicRouteTableId:
-    Description: 'Public Route Table ID'
-    Value: !Ref PublicRouteTable
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicRT-ID'
-
-  # NAT Gateway and Private Network
-  NATGatewayId:
-    Description: 'NAT Gateway ID'
-    Value: !Ref NATGateway
-    Export:
-      Name: !Sub '${AWS::StackName}-NAT-Gateway-ID'
-
-  NATGatewayEIPId:
-    Description: 'NAT Gateway Elastic IP ID'
-    Value: !Ref NATGatewayEIP
-    Export:
-      Name: !Sub '${AWS::StackName}-NAT-EIP-ID'
-
-  PrivateRouteTableId:
-    Description: 'Private Route Table ID'
-    Value: !Ref PrivateRouteTable
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateRT-ID'
-
-  PrivateSubnetPDNId:
-    Description: 'Private Subnet PDN ID'
-    Value: !Ref PrivateSubnetPDN
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet-PDN-ID'
-
-  PrivateSubnetDEVId:
-    Description: 'Private Subnet DEV ID'
-    Value: !Ref PrivateSubnetDEV
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet-DEV-ID'
-
-  DEVElasticIP:
-    Description: 'DEV Instance Elastic IP'
-    Value: !Ref DEVInstanceEIP
-    Export:
-      Name: !Sub '${AWS::StackName}-DEV-EIP'
-
-  DEVApplicationURL:
-    Description: 'DEV Frontend Application URL (via Elastic IP)'
-    Value: !Sub 'http://${DEVInstanceEIP}:4200'
-    Export:
-      Name: !Sub '${AWS::StackName}-DEV-App-URL'
-
-  DEVBackendURL:
-    Description: 'DEV Backend API URL (via Elastic IP)'
-    Value: !Sub 'http://${DEVInstanceEIP}:8080'
-    Export:
-      Name: !Sub '${AWS::StackName}-DEV-Backend-URL'
-
-  # PDN instances use dynamic public IPs (assigned by ASG)
-  # Use this command to get current PDN instance IPs:
-  # aws ec2 describe-instances --filters "Name=tag:aws:autoscaling:groupName,Values=LDC-AUTH-ASG-btobar-PDN" --query "Reservations[*].Instances[*].PublicIpAddress" --output text
-  PDNASGName:
-    Description: 'PDN Auto Scaling Group name - use AWS CLI to get instance IPs'
-    Value: !Sub 'LDC-AUTH-ASG-${NetworkUserName}-PDN'
-    Export:
-      Name: !Sub '${AWS::StackName}-PDN-ASG-Name'
-
-  PDNBackendAccessInfo:
-    Description: 'To access PDN backend from your local machine, get instance IP via AWS CLI and use: http://INSTANCE-IP:8080'
-    Value: 'Use AWS CLI: aws ec2 describe-instances --filters "Name=tag:aws:autoscaling:groupName,Values=LDC-AUTH-ASG-btobar-PDN" --query "Reservations[*].Instances[*].PublicIpAddress" --output text'
-    Export:
-      Name: !Sub '${AWS::StackName}-PDN-Backend-Access-Info'
-
-  # Production URLs (via ALB - for end users)
-  PDNProductionApplicationURL:
-    Description: 'PDN Frontend Application URL (via ALB - for production traffic)'
-    Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerPDNDNS}'
-    Export:
-      Name: !Sub '${AWS::StackName}-PDN-Production-App-URL'

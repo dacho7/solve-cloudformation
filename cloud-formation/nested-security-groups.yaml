@@ -157,35 +157,3 @@ Resources:
       SourceSecurityGroupId: !Ref ALBSecurityGroupDEV
       Description: 'Frontend Angular from ALB'
 
-Outputs:
-  SecurityGroupPDNId:
-    Description: 'PDN Security Group ID'
-    Value: !Ref SecurityGroupPDN
-    Export:
-      Name: !Sub '${AWS::StackName}-SG-PDN-ID'
-
-  SecurityGroupDEVId:
-    Description: 'DEV Security Group ID'
-    Value: !Ref SecurityGroupDEV
-    Export:
-      Name: !Sub '${AWS::StackName}-SG-DEV-ID'
-
-  ALBSecurityGroupPDNId:
-    Description: 'PDN ALB Security Group ID'
-    Value: !Ref ALBSecurityGroupPDN
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-SG-PDN-ID'
-
-  ALBSecurityGroupDEVId:
-    Description: 'DEV ALB Security Group ID'
-    Value: !Ref ALBSecurityGroupDEV
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-SG-DEV-ID'
-
-  SecurityGroupPDNName:
-    Description: 'PDN Security Group name'
-    Value: !Sub 'LDC-AUTH-SG-${NetworkUserName}-PDN'
-
-  SecurityGroupDEVName:
-    Description: 'DEV Security Group name'
-    Value: !Sub 'LDC-AUTH-SG-${NetworkUserName}-DEV' 
