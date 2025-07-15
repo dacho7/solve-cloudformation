@@ -67,7 +67,25 @@ Resources:
         - Key: Name
           Value: !Sub 'LDC-AUTH-TG-${NetworkUserName}-PDN'
 
-  # Listener for PDN ALB
+  # Target Group for PDN Backend (API)
+  TargetGroupPDNBackend:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'LDC-AUTH-TG-${NetworkUserName}-PDN-Backend'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref AuthorizationIdVPC
+      HealthCheckPath: /actuator/health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-TG-${NetworkUserName}-PDN-Backend'
+
+  # Listener for PDN ALB (Frontend)
   ListenerPDN:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -76,6 +94,17 @@ Resources:
           TargetGroupArn: !Ref TargetGroupPDN
       LoadBalancerArn: !Ref ApplicationLoadBalancerPDN
       Port: 80
+      Protocol: HTTP
+
+  # Listener for PDN ALB (Backend API)
+  ListenerPDNBackend:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroupPDNBackend
+      LoadBalancerArn: !Ref ApplicationLoadBalancerPDN
+      Port: 8080
       Protocol: HTTP
 
   # Application Load Balancer for DEV
@@ -146,6 +175,12 @@ Outputs:
     Value: !Ref TargetGroupPDN
     Export:
       Name: !Sub '${AWS::StackName}-TG-PDN-ARN'
+
+  TargetGroupPDNBackendArn:
+    Description: 'PDN Backend Target Group ARN'
+    Value: !Ref TargetGroupPDNBackend
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-PDN-Backend-ARN'
 
   TargetGroupDEVArn:
     Description: 'DEV Target Group ARN'

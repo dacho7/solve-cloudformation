@@ -60,12 +60,22 @@ Resources:
           FromPort: 8080
           ToPort: 8080
           CidrIp: 10.0.0.0/8
-          Description: 'Backend Spring Boot'
+          Description: 'Backend Spring Boot from VPC'
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+          Description: 'Backend Spring Boot from Internet'
         - IpProtocol: tcp
           FromPort: 4200
           ToPort: 4200
           CidrIp: 10.0.0.0/8
-          Description: 'Frontend Angular'
+          Description: 'Frontend Angular from VPC'
+        - IpProtocol: tcp
+          FromPort: 4200
+          ToPort: 4200
+          CidrIp: 0.0.0.0/0
+          Description: 'Frontend Angular from Internet'
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27017
@@ -88,6 +98,11 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
           Description: 'HTTP from Internet'
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+          Description: 'Backend API from Internet'
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
