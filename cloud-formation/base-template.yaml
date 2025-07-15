@@ -7,6 +7,11 @@ Parameters:
     Description: Network user name for naming resources
     Default: 'btobar'
   
+  ExistingInternetGateway:
+    Type: String
+    Description: ID of existing Internet Gateway attached to the VPC
+    Default: igw-02aab08fb6d2a2d3d
+
   AuthorizationIdVPC:
     Type: String
     Description: ID of existing VPC AUTORIZACION-vpc
@@ -66,7 +71,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: igw-02aab08fb6d2a2d3d
+      GatewayId: !Ref ExistingInternetGateway
 
   # Associate Public Subnet AZ1 with Route Table
   PublicSubnetAZ1RouteTableAssociation:
@@ -476,8 +481,6 @@ Resources:
       InstanceId: !Ref EC2InstanceDEV
       EIP: !Ref DEVInstanceEIP
 
-  # Note: PDN instances in ASG will get dynamic public IPs
-  # You can get their IPs via AWS CLI: aws ec2 describe-instances --filters "Name=tag:aws:autoscaling:groupName,Values=LDC-AUTH-ASG-btobar-PDN"
 
 Outputs:
   # Network user name
