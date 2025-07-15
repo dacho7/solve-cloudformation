@@ -167,6 +167,7 @@ Resources:
         Fn::Base64: !Sub
           - |
             #!/bin/bash
+            # Force instance replacement - Updated $(date +%Y%m%d-%H%M)
             yum update -y
             yum install -y docker git curl jq
             service docker start
@@ -238,6 +239,11 @@ Resources:
                   - "4200:80"
                 environment:
                   - API_URL=http://${DevElasticIP}:8080/api
+                restart: on-failure
+                networks:
+                  - file-server-net
+                depends_on:
+                  - backend
             networks:
               file-server-net:
                 driver: bridge
@@ -254,12 +260,18 @@ Resources:
             echo "Application should be available on:" >> /var/log/deployment.log
             echo "Frontend: http://$PRIVATE_IP:4200" >> /var/log/deployment.log
             echo "Backend: http://$PRIVATE_IP:8080" >> /var/log/deployment.log
+            echo "External Frontend: http://${DevElasticIP}:4200" >> /var/log/deployment.log
+            echo "External Backend: http://${DevElasticIP}:8080" >> /var/log/deployment.log
           - DevElasticIP: !Ref DEVInstanceEIP
       Tags:
         - Key: Name
           Value: !Sub 'LDC-AUTH_EC2_${NetworkUserName}-DEV'
         - Key: Environment
           Value: 'DEV'
+        - Key: LastUpdate
+          Value: '20241219-1100'
+        - Key: ForceReplacement
+          Value: 'TERMINATED-NEEDS-REPLACEMENT'
 
   # Nested Stack for Load Balancers
   LoadBalancersStack:
