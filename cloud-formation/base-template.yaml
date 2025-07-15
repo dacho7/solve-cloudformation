@@ -12,11 +12,6 @@ Parameters:
     Description: ID of existing VPC AUTORIZACION-vpc
     Default: vpc-05835abff54f99d3c
 
-  ExistingInternetGateway:
-    Type: String
-    Description: ID of existing Internet Gateway attached to the VPC
-    Default: igw-02aab08fb6d2a2d3d
-
   MaxInstancesASG:
     Type: Number
     Description: Maximum number of instances in Auto Scaling Group
@@ -71,7 +66,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref ExistingInternetGateway
+      GatewayId: igw-02aab08fb6d2a2d3d
 
   # Associate Public Subnet AZ1 with Route Table
   PublicSubnetAZ1RouteTableAssociation:

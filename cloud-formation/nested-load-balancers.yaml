@@ -157,6 +157,38 @@ Resources:
       Port: 80
       Protocol: HTTP
       
+  # Target Group for DEV Backend (API)
+  TargetGroupDEVBackend:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'LDC-AUTH-TG-${NetworkUserName}-DEV-Backend'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref AuthorizationIdVPC
+      HealthCheckPath: /actuator/health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Targets:
+        - Id: !Ref EC2InstanceDEVId
+          Port: 8080
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-TG-${NetworkUserName}-DEV-Backend'
+
+  # Listener for DEV ALB (Backend API)
+  ListenerDEVBackend:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroupDEVBackend
+      LoadBalancerArn: !Ref ApplicationLoadBalancerDEV
+      Port: 8080
+      Protocol: HTTP
+
 Outputs:
   ApplicationLoadBalancerPDNId:
     Description: 'PDN Application Load Balancer ID'
