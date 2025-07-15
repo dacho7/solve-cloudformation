@@ -11,11 +11,11 @@ Parameters:
     Description: ID of existing VPC
     
   PublicSubnetAZ1:
-    Type: AWS::EC2::Subnet::Id
+    Type: String
     Description: Public subnet ID in us-east-1a for ALB
     
   PublicSubnetAZ2:
-    Type: AWS::EC2::Subnet::Id
+    Type: String
     Description: Public subnet ID in us-east-1b for ALB
     
   ALBSecurityGroupPDNId:

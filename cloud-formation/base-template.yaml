@@ -17,15 +17,7 @@ Parameters:
     Description: Maximum number of instances in Auto Scaling Group
     Default: 3
     MinValue: 1
-    MaxValue: 10
-
-  PublicSubnetAZ1:
-    Type: AWS::EC2::Subnet::Id
-    Description: Public subnet ID in us-east-1a for ALB
-    
-  PublicSubnetAZ2:
-    Type: AWS::EC2::Subnet::Id
-    Description: Public subnet ID in us-east-1b for ALB
+    MaxValue: 5
 
 Mappings:
   RegionMap:
@@ -35,6 +27,77 @@ Mappings:
       AMI: ami-0c02fb55956c7d316
 
 Resources:
+  # Public Subnet for ALB in us-east-1a
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AuthorizationIdVPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-PublicSubnet-${NetworkUserName}-AZ1'
+
+  # Public Subnet for ALB in us-east-1b
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AuthorizationIdVPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-PublicSubnet-${NetworkUserName}-AZ2'
+
+  # Internet Gateway (if not exists)
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-IGW-${NetworkUserName}'
+
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref AuthorizationIdVPC
+
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AuthorizationIdVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'LDC-AUTH-PublicRT-${NetworkUserName}'
+
+  # Default Public Route
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnet AZ1 with Route Table
+  PublicSubnetAZ1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetAZ1
+
+  # Associate Public Subnet AZ2 with Route Table
+  PublicSubnetAZ2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetAZ2
+
   # Nested Stack for Security Groups
   SecurityGroupsStack:
     Type: AWS::CloudFormation::Stack
@@ -50,7 +113,10 @@ Resources:
   # Nested Stack for Load Balancers
   LoadBalancersStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: SecurityGroupsStack
+    DependsOn: 
+      - SecurityGroupsStack
+      - PublicSubnetAZ1
+      - PublicSubnetAZ2
     Properties:
       TemplateURL: nested-load-balancers.yaml
       Parameters:
@@ -426,3 +492,28 @@ Outputs:
     Value: !Sub 'http://${LoadBalancersStack.Outputs.LoadBalancerDEVDNS}'
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DEV-DNS'
+
+  # Public Subnets
+  PublicSubnetAZ1Id:
+    Description: 'Public Subnet AZ1 ID'
+    Value: !Ref PublicSubnetAZ1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet-AZ1-ID'
+
+  PublicSubnetAZ2Id:
+    Description: 'Public Subnet AZ2 ID'
+    Value: !Ref PublicSubnetAZ2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet-AZ2-ID'
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID'
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-IGW-ID'
+
+  PublicRouteTableId:
+    Description: 'Public Route Table ID'
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicRT-ID'

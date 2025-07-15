@@ -1,6 +1,0 @@
-NetworkUserName: "btobar"
-MaxInstancesASG: 3
-AuthorizationIdVPC: "vpc-05835abff54f99d3c"
-Region: "us-east-1"
-StackName: "cloudformation-challenge-punto2"
-
